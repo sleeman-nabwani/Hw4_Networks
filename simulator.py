@@ -15,6 +15,11 @@ class Event:
         # Lower time values have higher priority
         return self.time < other.time
 
+class Departure(Event):
+    def __init__(self, time, type, server, service_time, wait_time = 0):
+        super().__init__(time, type, server)
+        self.service_time = service_time
+        self.wait_time = wait_time
 
         
 class Server:
@@ -29,35 +34,35 @@ class Server:
 
         self.total_wait_time = 0
         self.total_service_time = 0
-        self.arrival_service = 0
         self.last_departure_time = 0 
         
     def handle_arrival(self, current_time):
         if not self.busy:
+            # Server is idle - start service immediately
             self.busy = True
             service_time = random.expovariate(self.mu)
-            self.arrival_service += service_time
             departure_time = current_time + service_time
-            self.event_queue.put(Event(departure_time, 'DEPARTURE', self))
+            self.event_queue.put(Departure(departure_time, 'DEPARTURE', self, service_time))
         elif len(self.server_queue) < self.max_queue_size:
+            # Server busy but queue has space - add to queue
             self.server_queue.append(current_time)
         else:
+            # Queue is full - reject customer
             self.customers_rejected += 1
             
-    def handle_departure(self,current_time):
-        self.last_departure_time = current_time  # Update last departure time
+    def handle_departure(self,current_time, departure_event: Departure):
+        #update server stats
+        self.last_departure_time = current_time
+        self.customers_served += 1
+        self.total_service_time += departure_event.service_time
+        self.total_wait_time += departure_event.wait_time
+        #handle next customer
         if self.server_queue:
-            if self.arrival_service > 0:
-                self.total_service_time += self.arrival_service
-                self.arrival_service = 0
             arrival_time = self.server_queue.pop(0)
             wait_time = current_time - arrival_time
             service_time = random.expovariate(self.mu)
             departure_time = current_time + service_time  
-            self.event_queue.put(Event(departure_time, 'DEPARTURE', self))
-            self.total_service_time += service_time
-            self.total_wait_time += wait_time
-            self.customers_served += 1
+            self.event_queue.put(Departure(departure_time, 'DEPARTURE', self, service_time, wait_time))
         else:
             self.busy = False
             
@@ -80,7 +85,7 @@ class loadBalancer:
         self.events = PriorityQueue()
         self.server = Server(mu, N - 1, self.events) 
 
-    def print_results(self):
+    def print_comprehensive_results(self):
         # A - Number of requests that received service
         print(f"A - Number of requests that received service: {self.server.customers_served}")
         
@@ -95,7 +100,11 @@ class loadBalancer:
         
         # T_s - Average service time of a message in the server system
         print(f"T_s - Average service time of a message in the server system: {self.server.average_service_time():.4f}")
-
+    
+    def print_average_time_till_departure(self):
+        print(f"number of customers served: {self.server.customers_served}")
+        print(f"Average time till departure: {(self.server.total_service_time + self.server.total_wait_time) / self.server.customers_served:.4f}")
+    
     def run(self, T):
         self.events.put(Event(0, 'ARRIVAL', self.server))
         while not self.events.empty():
@@ -108,7 +117,7 @@ class loadBalancer:
                 next_arrival_time = current_time + random.expovariate(self.lambda_)
                 self.events.put(Event(next_arrival_time, 'ARRIVAL', self.server))
             elif event.type == 'DEPARTURE':
-                event.server.handle_departure(current_time)
+                event.server.handle_departure(current_time, event)
         
     
 
@@ -134,6 +143,7 @@ if __name__ == "__main__":
     # Create and run simulation
     lb = loadBalancer(lambda_, mu, N)
     lb.run(T)
-    lb.print_results()
+    #lb.print_comprehensive_results()
+    lb.print_average_time_till_departure()
     
     

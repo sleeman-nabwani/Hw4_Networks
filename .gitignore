@@ -1,0 +1,23 @@
+#ignore pyc files
+*.pyc
+
+#ignore docx files
+*.docx
+
+#ignore pdf files
+*.pdf
+
+
+#ignore pictures
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+
+#ignore test files
+test_section2.py
+test_simulator.py
+
+
