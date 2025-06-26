@@ -2,7 +2,7 @@ all: simulator
 
 simulator: simulator.py
 	echo '#!/bin/bash' > simulator
-	echo 'python simulator.py "$$@"' >> simulator
+	echo 'python3 simulator.py "$$@"' >> simulator
 	chmod +x simulator
 
 clean:
