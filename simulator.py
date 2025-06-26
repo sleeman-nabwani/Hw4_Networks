@@ -78,51 +78,66 @@ class Server:
 
         
 class loadBalancer:
-    def __init__(self, lambda_, mu, N):
+    def __init__(self, lambda_, mu, P, Q, M):
         self.lambda_ = lambda_
         self.mu = mu
-        self.N = N
         self.events = PriorityQueue()
-        self.server = Server(mu, N - 1, self.events) 
-
-    def print_comprehensive_results(self):
-        # A - Number of requests that received service
-        print(f"A - Number of requests that received service: {self.server.customers_served}")
+        self.servers = [Server(mu[i], Q[i], self.events) for i in range(M)] 
+        self.servers_probabilities = P
         
-        # B - Number of requests that encountered a full queue and were rejected without receiving service
-        print(f"B - Number of requests that were rejected without receiving service: {self.server.customers_rejected}")
-        
-        # Tend - Time of completion of the last message
-        print(f"Tend - Time of completion of the last message: {self.server.last_departure_time}")
-        
-        # T_w - Average wait time of a message in the server system before receiving service
-        print(f"T_w - Average wait time of a message in the server system before receiving service: {self.server.average_wait_time():.4f}")
-        
-        # T_s - Average service time of a message in the server system
-        print(f"T_s - Average service time of a message in the server system: {self.server.average_service_time():.4f}")
-    
-    def print_average_time_till_departure(self):
-        print(f"number of customers served: {self.server.customers_served}")
-        print(f"Average time till departure: {(self.server.total_service_time + self.server.total_wait_time) / self.server.customers_served:.4f}")
-    
     def run(self, T):
-        self.events.put(Event(0, 'ARRIVAL', self.server))
+        #initialize events
+        first_server = np.random.choice(self.servers, p=self.servers_probabilities)
+        self.events.put(Event(0, 'ARRIVAL', first_server))
         while not self.events.empty():
             event = self.events.get()
             current_time = event.time
             if current_time > T:
                 break
+            #handle arrival events
             if event.type == 'ARRIVAL':
                 event.server.handle_arrival(current_time)
                 next_arrival_time = current_time + random.expovariate(self.lambda_)
-                self.events.put(Event(next_arrival_time, 'ARRIVAL', self.server))
+                #choose server based on probabilities
+                chosen_server = np.random.choice(self.servers, p=self.servers_probabilities)
+                self.events.put(Event(next_arrival_time, 'ARRIVAL', chosen_server))
+            #handle departure events
             elif event.type == 'DEPARTURE':
                 event.server.handle_departure(current_time, event)
         
     
 
+    def print_comprehensive_results(self):
+        # A - Number of requests that received service
+        print(f"A - Number of requests that received service: {sum([server.customers_served for server in self.servers])}")
         
+        # B - Number of requests that encountered a full queue and were rejected without receiving service
+        print(f"B - Number of requests that were rejected without receiving service: {sum([server.customers_rejected for server in self.servers])}")
         
+        # Tend - Time of completion of the last message
+        print(f"Tend - Time of completion of the last message: {max([server.last_departure_time for server in self.servers])}")
+        
+        # T_w - Average wait time of a message in the server system before receiving service
+        print(f"T_w - Average wait time of a message in the server system before receiving service: {sum([server.total_wait_time for server in self.servers]) / sum([server.customers_served for server in self.servers]):.4f}")
+        
+        # T_s - Average service time of a message in the server system
+        print(f"T_s - Average service time of a message in the server system: {sum([server.total_service_time for server in self.servers]) / sum([server.customers_served for server in self.servers]):.4f}")
+    
+    def print_average_time_till_departure(self):
+        print(f"number of customers served: {sum([server.customers_served for server in self.servers])}")
+        total_wait_time = sum([server.total_wait_time for server in self.servers])
+        total_service_time = sum([server.total_service_time for server in self.servers])
+        total_customers_served = sum([server.customers_served for server in self.servers])
+        print(f"Average time till departure: {(total_wait_time + total_service_time) / total_customers_served:.4f}")
+        
+    def print_results(self):
+        A = sum([server.customers_served for server in self.servers])
+        B = sum([server.customers_rejected for server in self.servers])
+        T_end = max([server.last_departure_time for server in self.servers])
+        T_w = sum([server.total_wait_time for server in self.servers]) / sum([server.customers_served for server in self.servers])
+        T_s = sum([server.total_service_time for server in self.servers]) / sum([server.customers_served for server in self.servers])
+        print(f"{A} {B} {T_end} {T_w:.4f} {T_s:.4f}")
+
 
 if __name__ == "__main__":
     # Use current time as seed for different results each run
@@ -131,19 +146,36 @@ if __name__ == "__main__":
     random.seed(seed)
     
     args = sys.argv
-    if len(args) != 5: 
+    T = int(args[1])
+    M = int(args[2])
+    if len(args)-1 != (3*M + 3):
         print("wrong number of arguments")
-        print("Usage: python simulator.py lambda mu N T")
         sys.exit(1)
-    lambda_ = float(args[1])
-    mu = float(args[2])
-    N = int(args[3])
-    T = int(args[4])
+        
+    #parsing to indexes
+    P_start = 3
+    P_end = M + P_start
+    
+    lambda_index = P_end
+    
+    Q_start = lambda_index + 1
+    Q_end = Q_start + M
+    
+    mu_start = Q_end
+    mu_end = mu_start + M
+    
+    #harvesting parameters
+    P = [float(args[i]) for i in range(P_start, P_end)]
+    lambda_ = float(args[lambda_index])
+    Q = [int(args[i]) for i in range(Q_start, Q_end)]
+    mu = [float(args[i]) for i in range(mu_start, mu_end)]
+    if sum(P) != 1:
+        print("sum of P is not 1")
+        sys.exit(1)
     
     # Create and run simulation
-    lb = loadBalancer(lambda_, mu, N)
+    lb = loadBalancer(lambda_, mu, P, Q, M)
     lb.run(T)
-    #lb.print_comprehensive_results()
-    lb.print_average_time_till_departure()
+    lb.print_results()
     
     

@@ -1,6 +1,9 @@
 #ignore pyc files
 *.pyc
 
+#ignore vs code files
+.vscode
+
 #ignore docx files
 *.docx
 
@@ -18,6 +21,7 @@
 
 #ignore test files
 test_section2.py
-test_simulator.py
+section3_4.py
 
-
+#ignore executable
+simulator
