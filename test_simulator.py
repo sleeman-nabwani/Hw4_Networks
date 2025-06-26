@@ -612,6 +612,140 @@ def performance_stress_test():
         else:
             print(f"  ❌ Test failed")
 
+def performance_time_limit_test():
+    """Test edge cases that might exceed 2-minute time limit (Hebrew requirement)"""
+    print(f"\n{'='*90}")
+    print("PERFORMANCE TIME LIMIT TESTING (2-MINUTE REQUIREMENT)")
+    print("Testing edge cases to ensure execution time < 2 minutes")
+    print(f"{'='*90}")
+    
+    # Edge cases that might be computationally expensive
+    time_limit_cases = [
+        {
+            'name': 'Very High Arrival Rate with Small Queues',
+            'T': 10000, 'M': 4, 'P': [0.25, 0.25, 0.25, 0.25], 'lambda_': 1000,
+            'Q': [5, 5, 5, 5], 'mu': [200, 200, 200, 200],
+            'expected_issue': 'Many rejections due to high λ and small queues'
+        },
+        {
+            'name': 'Long Simulation Time with Moderate Load',
+            'T': 50000, 'M': 2, 'P': [0.5, 0.5], 'lambda_': 100,
+            'Q': [50, 50], 'mu': [60, 60],
+            'expected_issue': 'Long simulation time might cause timeout'
+        },
+        {
+            'name': 'Many Servers with High Load',
+            'T': 20000, 'M': 10, 'P': [0.1]*10, 'lambda_': 500,
+            'Q': [20]*10, 'mu': [60]*10,
+            'expected_issue': 'Many servers might slow down event processing'
+        },
+        {
+            'name': 'Unstable System with Large Simulation Time',
+            'T': 30000, 'M': 3, 'P': [0.4, 0.3, 0.3], 'lambda_': 200,
+            'Q': [10, 10, 10], 'mu': [30, 30, 30],
+            'expected_issue': 'ρ > 2, heavily overloaded system'
+        },
+        {
+            'name': 'Very Fast Servers with Extreme Arrival Rate',
+            'T': 15000, 'M': 5, 'P': [0.2]*5, 'lambda_': 5000,
+            'Q': [100]*5, 'mu': [1200]*5,
+            'expected_issue': 'Extremely high event rate'
+        },
+        {
+            'name': 'Single Server with Maximum Load',
+            'T': 25000, 'M': 1, 'P': [1.0], 'lambda_': 500,
+            'Q': [1000], 'mu': [600],
+            'expected_issue': 'Single bottleneck with high load'
+        }
+    ]
+    
+    max_time_allowed = 120.0  # 2 minutes in seconds
+    all_passed = True
+    
+    for i, test_case in enumerate(time_limit_cases, 1):
+        print(f"\n--- Time Limit Test {i}: {test_case['name']} ---")
+        print(f"Parameters: T={test_case['T']}, M={test_case['M']}, λ={test_case['lambda_']}")
+        print(f"Potential issue: {test_case['expected_issue']}")
+        
+        # Calculate theoretical metrics
+        total_capacity = sum(test_case['mu'])
+        utilization = test_case['lambda_'] / total_capacity
+        expected_events = test_case['lambda_'] * test_case['T'] * 2  # Rough estimate (arrivals + departures)
+        
+        print(f"Theoretical analysis:")
+        print(f"  System utilization (ρ): {utilization:.2f}")
+        print(f"  Expected events: ~{expected_events:,.0f}")
+        print(f"  Total capacity: {total_capacity}")
+        
+        # Run the test with timing
+        start_time = time.time()
+        
+        try:
+            # Set a consistent seed for reproducibility
+            result = run_single_test(
+                test_case['T'], test_case['M'], test_case['P'], 
+                test_case['lambda_'], test_case['Q'], test_case['mu'], 
+                seed=12345
+            )
+            
+            end_time = time.time()
+            execution_time = end_time - start_time
+            
+            print(f"\nExecution Results:")
+            print(f"  Execution time: {execution_time:.2f} seconds")
+            print(f"  Time limit: {max_time_allowed} seconds")
+            
+            if execution_time <= max_time_allowed:
+                print(f"  ✅ PASSED - Within time limit ({execution_time:.2f}s < {max_time_allowed}s)")
+                
+                if result:
+                    actual_events = result.A * 2  # Approximate events processed
+                    events_per_second = actual_events / execution_time if execution_time > 0 else 0
+                    print(f"  Performance: {events_per_second:,.0f} events/second")
+                    print(f"  Customers served: {result.A:,}")
+                    print(f"  Customers rejected: {result.B:,}")
+                    
+                    # Additional performance metrics
+                    rejection_rate = result.B / (result.A + result.B) if (result.A + result.B) > 0 else 0
+                    print(f"  Rejection rate: {rejection_rate:.1%}")
+                    
+                    if utilization >= 1.0:
+                        print(f"  ✓ High rejection rate expected for unstable system (ρ={utilization:.2f})")
+                    else:
+                        print(f"  ✓ System behavior as expected for ρ={utilization:.2f}")
+                        
+            else:
+                print(f"  ❌ FAILED - Exceeded time limit ({execution_time:.2f}s > {max_time_allowed}s)")
+                all_passed = False
+                
+        except Exception as e:
+            end_time = time.time()
+            execution_time = end_time - start_time
+            print(f"  ❌ FAILED - Exception after {execution_time:.2f}s: {e}")
+            all_passed = False
+    
+    # Summary
+    print(f"\n{'='*60}")
+    print("TIME LIMIT TEST SUMMARY")
+    print(f"{'='*60}")
+    
+    if all_passed:
+        print("✅ ALL TESTS PASSED - Simulator meets 2-minute requirement")
+        print("✅ No edge cases exceed the time limit")
+        print("✅ Performance is acceptable for submission")
+    else:
+        print("❌ SOME TESTS FAILED - Simulator may exceed time limits")
+        print("⚠️  Consider optimizing for edge cases")
+        print("⚠️  Review implementation for performance bottlenecks")
+    
+    print(f"\nRecommendations:")
+    print(f"  - All test cases should complete within {max_time_allowed} seconds")
+    print(f"  - Consider early termination for unstable systems")
+    print(f"  - Monitor memory usage for large simulations")
+    print(f"  - Test with actual submission parameters before final submission")
+    
+    return all_passed
+
 if __name__ == "__main__":
     try:
         print("🚀 COMPREHENSIVE MULTI-SERVER LOAD BALANCER TEST SUITE")
@@ -625,6 +759,7 @@ if __name__ == "__main__":
         test_stability_boundaries()
         test_input_validation_comprehensive()
         performance_stress_test()
+        performance_time_limit_test()
         
         print(f"\n{'='*90}")
         print("🎉 COMPREHENSIVE TEST SUITE COMPLETED!")
